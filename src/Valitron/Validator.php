@@ -750,6 +750,12 @@ class Validator
      */
     public function error($field, $msg, array $params = array())
     {
+        $this->_errors[$field][] = $this->renderErrorMessage($field, $msg, $params);
+        
+    }
+    
+    private function renderErrorMessage($field, $msg, array $params = array())
+    {
         $msg = $this->checkAndSetLabel($field, $msg, $params);
 
         $values = array();
@@ -774,7 +780,7 @@ class Validator
             $values[] = $param;
         }
 
-        $this->_errors[$field][] = vsprintf($msg, $values);
+        return vsprintf($msg, $values);
     }
 
     /**
@@ -1022,4 +1028,189 @@ class Validator
             }
         }
     }
+    
+    public function exportRules($clientValidator = "bootstrapvalidator", $options = array()){
+        $exportType = isset($options['exportType']) ? $options['exportType'] : "json";
+        
+        if ($exportType == "json"){
+            $prettyPrint = isset($options['prettyPrint']) ? $options['prettyPrint'] : false;
+            return $this->exportRulesJSON($clientValidator, $prettyPrint);
+        } else {
+            error_log("Unsupported exportType in exportRules (must be 'json').");
+            return false;
+        }    
+    }
+    
+    public function exportRulesJSON($clientValidator, $prettyPrint = false){
+        if ($clientValidator == "bootstrapvalidator"){
+            return $this->exportRulesBootstrapValidatorJSON($prettyPrint);
+        }else {
+            error_log("Unsupported client validator type in exportRulesJSON (only 'bootstrapvalidator' is currently supported).");
+            return false;
+        }   
+    }
+    
+    public function exportRulesBootstrapValidatorJSON($prettyPrint = false){
+        $result = array();
+        // Build scaffold for all fields
+        foreach ($this->_fields as $field_name => $field){
+            $result[$field_name] = array();
+            $result[$field_name]['validators'] = array();
+        }
+                    
+        // Find all relevant validators for this field
+        foreach ($this->_validations as $v) {
+            foreach ($v['fields'] as $field_name) {             
+                if (isset($field_name, $this->_fields)) {
+                    $rule = $this->mapBootstrapValidatorRule($v['rule'], $v['params']);
+                    if ($rule) {
+                        $keys = array_keys($rule);
+                        $clientRuleName = $keys[0];
+                        if ($v['message']) {
+                            $rule[$clientRuleName]['message'] = $this->renderErrorMessage($field_name, $v['message'], $v['params']);
+                        }   
+                            
+                        $result[$field_name]['validators'][$clientRuleName] = $rule[$clientRuleName];
+                        
+                        // If the rule is an "identical" or "different" rule, add the rule to the other field
+                        if (($clientRuleName == "identical") || ($clientRuleName == "different")){
+                            $field_name_other = $v['params'][0];
+                            $params = array($field_name);
+                            $rule = $this->mapBootstrapValidatorRule($v['rule'], $params);
+                            if ($rule) {
+                                $keys = array_keys($rule);
+                                $clientRuleName = $keys[0];
+                                if ($v['message']) {
+                                    $rule[$clientRuleName]['message'] = $this->renderErrorMessage($field_name_other, $v['message'], $params);
+                                }   
+                                    
+                                $result[$field_name_other]['validators'][$clientRuleName] = $rule[$clientRuleName];
+                            }
+                        }
+                        
+                        
+                    }
+                }
+            }
+        }        
+        if ($prettyPrint)
+            return json_encode($result, JSON_PRETTY_PRINT);
+        else
+            return json_encode($result);
+    }
+    
+    public function mapBootstrapValidatorRule($ruleName, $params){
+        $rule = array();
+        
+        switch ($ruleName){    
+            case "required" :
+                $rule["notEmpty"] = array();
+                break;
+            case "different" :
+                $rule["different"] = array();
+                $rule["different"]["field"] = $params[0];
+                break;
+            case "equals" :
+                $rule["identical"] = array();
+                $rule["identical"]["field"] = $params[0];
+                break;            
+            case "accepted" :
+                $rule["choice"] = array();
+                $rule["choice"]["min"] = 1;
+                break;
+            case "numeric" :
+                $rule["numeric"] = array();
+                break;
+            case "integer" :
+                $rule["integer"] = array();
+                break;
+            case "length" :
+                $rule["stringLength"] = array();
+                $rule["stringLength"]["min"] = $params[0];
+                $rule["stringLength"]["max"] = $params[0];
+                break;                
+            case "lengthBetween" :
+                $rule["stringLength"] = array();
+                $rule["stringLength"]["min"] = $params[0];
+                $rule["stringLength"]["max"] = $params[1];
+                break;               
+            case "lengthMin" :
+                $rule["stringLength"] = array();
+                $rule["stringLength"]["min"] = $params[0];
+                break;                
+            case "lengthMax" :
+                $rule["stringLength"] = array();
+                $rule["stringLength"]["max"] = $params[0];
+                break; 
+            case "min" :
+                $rule["greaterThan"] = array();
+                $rule["greaterThan"]["value"] = $params[0];
+                $rule["greaterThan"]["inclusive"] = "true";
+                break; 
+            case "max" :
+                $rule["lessThan"] = array();
+                $rule["lessThan"]["value"] = $params[0];
+                $rule["lessThan"]["inclusive"] = "true";
+                break;                 
+            case "in" :
+                $rule["regexp"] = array();
+                $rule["regexp"]["regexp"] = "/^" . implode("|", $params[0]) . "$/i";
+                break;
+            case "notIn" :
+                $rule["regexp"] = array();
+                $rule["regexp"]["regexp"] = "/^?!(" . implode("|", $params[0]) . "$)/i";
+                break;            
+            case "ip" :
+                $rule["ip"] = array();
+                $rule["ip"]["ipv6"] = false;
+                break;                 
+            case "email" :
+                $rule["emailAddress"] = array();
+                break;   
+            case "url" :
+                $rule["uri"] = array();
+                break;
+            case "urlActive" :
+                $rule["uri"] = array();
+                break;
+            case "alpha" :
+                $rule["regexp"] = array();
+                $rule["regexp"]["regexp"] = "/^[a-zA-Z]*$/i";
+                break;              
+            case "alphaNum" :
+                $rule["regexp"] = array();
+                $rule["regexp"]["regexp"] = "/^[a-zA-Z0-9]*$/i";
+                break;                   
+            case "slug" :
+                $rule["regexp"] = array();
+                $rule["regexp"]["regexp"] = "/^[a-z0-9\-_]*$/i";
+                break;   
+            case "regex" :
+                $rule["regexp"] = array();
+                $rule["regexp"]["regexp"] = $params[0];
+                break;  
+            case "date" :
+                $rule["date"] = array();            // Note: this validates against only one format, MM/DD/YYYY
+                break;                   
+            case "contains" :
+                $rule["regexp"] = array();
+                $rule["regexp"]["regexp"] = "/" . $params[0] . "/i";
+                break;
+            case "creditCard" :
+                $rule["creditCard"] = array();
+                break;
+                
+            // Unsupported validators
+            case "dateFormat" :  return null;
+            // TODO: convert PHP's formats into bootstrapValidator's http://bootstrapvalidator.com/validators/date/ formats      
+            case "dateBefore" : return null;        // Date comparison not supported in bootstrapValidator
+            case "dateAfter" : return null;        // Date comparison not supported in bootstrapValidator     
+            case "instanceOf" : return null;
+            case "array" : return null;
+        }
+                    
+        return $rule;
+    }
+    
+    
 }
