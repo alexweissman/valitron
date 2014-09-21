@@ -1066,11 +1066,43 @@ class Validator
                     if ($rule) {
                         $keys = array_keys($rule);
                         $clientRuleName = $keys[0];
-                        if ($v['message']) {
-                            $rule[$clientRuleName]['message'] = $this->renderErrorMessage($field_name, $v['message'], $v['params']);
-                        }   
-                            
-                        $result[$field_name]['validators'][$clientRuleName] = $rule[$clientRuleName];
+                        
+                        // If the client rule already exists, attempt to merge                        
+                        if (isset($result[$field_name]['validators'][$clientRuleName])){
+                            $params = array();
+                            if (isset($rule[$clientRuleName]['min'])){
+                                if (isset($result[$field_name]['validators'][$clientRuleName]['min'])){
+                                    $result[$field_name]['validators'][$clientRuleName]['min'] = max(array($rule[$clientRuleName]['min'], $result[$field_name]['validators'][$clientRuleName]['min']));
+                                } else {
+                                    $result[$field_name]['validators'][$clientRuleName]['min'] = $rule[$clientRuleName]['min'];
+                                }
+                            }
+                            if (isset($rule[$clientRuleName]['max'])){
+                                if (isset($result[$field_name]['validators'][$clientRuleName]['max'])){
+                                    $result[$field_name]['validators'][$clientRuleName]['max'] = min(array($rule[$clientRuleName]['max'], $result[$field_name]['validators'][$clientRuleName]['max']));
+                                } else {
+                                    $result[$field_name]['validators'][$clientRuleName]['max'] = $rule[$clientRuleName]['max'];
+                                }
+                            }
+                            // Update message
+                            $min = isset($result[$field_name]['validators'][$clientRuleName]['min']) ? $result[$field_name]['validators'][$clientRuleName]['min'] : null;
+                            $max = isset($result[$field_name]['validators'][$clientRuleName]['max']) ? $result[$field_name]['validators'][$clientRuleName]['max'] : null;
+                            if ($min && $max)
+                                if ($min == $max)
+                                    $result[$field_name]['validators'][$clientRuleName]['message'] = $this->renderErrorMessage($field_name, $field_name . " "  . static::$_ruleMessages['length'], array($min, $max));
+                                else
+                                    $result[$field_name]['validators'][$clientRuleName]['message'] = $this->renderErrorMessage($field_name, $field_name . " "  . static::$_ruleMessages['lengthBetween'], array($min, $max));
+                            else if ($min)
+                                $result[$field_name]['validators'][$clientRuleName]['message'] = $this->renderErrorMessage($field_name, $field_name . " "  . static::$_ruleMessages['lengthMin'], array($min));
+                            else if ($max)
+                                $result[$field_name]['validators'][$clientRuleName]['message'] = $this->renderErrorMessage($field_name, $field_name . " "  . static::$_ruleMessages['lengthMax'], array($max)); 
+                        } else {                      
+                            // Add the rule and message
+                            if ($v['message']) {
+                                $rule[$clientRuleName]['message'] = $this->renderErrorMessage($field_name, $v['message'], $v['params']);
+                            }   
+                            $result[$field_name]['validators'][$clientRuleName] = $rule[$clientRuleName];
+                        }
                         
                         // If the rule is an "identical" or "different" rule, add the rule to the other field
                         if (($clientRuleName == "identical") || ($clientRuleName == "different")){
