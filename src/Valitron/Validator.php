@@ -1029,28 +1029,51 @@ class Validator
         }
     }
     
-    public function exportRules($clientValidator = "bootstrapvalidator", $options = array()){
-        $exportType = isset($options['exportType']) ? $options['exportType'] : "json";
-        
-        if ($exportType == "json"){
-            $prettyPrint = isset($options['prettyPrint']) ? $options['prettyPrint'] : false;
-            return $this->exportRulesJSON($clientValidator, $prettyPrint);
+    public function exportRules($clientValidator = "bootstrapvalidator", $options = array()){ 
+        if ($clientValidator == "bootstrapvalidator"){
+            return $this->exportRulesBootstrapValidator($options);
         } else {
-            error_log("Unsupported exportType in exportRules (must be 'json').");
-            return false;
+            error_log("Unsupported client validator type in exportRulesJSON (only 'bootstrapvalidator' is currently supported).");
+            return false;            
         }    
     }
     
-    public function exportRulesJSON($clientValidator, $prettyPrint = false){
-        if ($clientValidator == "bootstrapvalidator"){
-            return $this->exportRulesBootstrapValidatorJSON($prettyPrint);
-        }else {
-            error_log("Unsupported client validator type in exportRulesJSON (only 'bootstrapvalidator' is currently supported).");
+    public function exportRulesBootstrapValidator($options = array()){
+        $exportType = isset($options['exportType']) ? $options['exportType'] : "json";
+        $prettyPrint = isset($options['prettyPrint']) ? $options['prettyPrint'] : false;
+        if ($exportType == "json"){
+            $json = $this->exportRulesBootstrapValidatorJSON();
+            if ($prettyPrint)
+                return json_encode($json, JSON_PRETTY_PRINT);
+            else
+                return json_encode($json);
+
+        }else if ($exportType == "data"){
+            $json = $this->exportRulesBootstrapValidatorJSON();
+            $result = array();
+            // Convert json to data strings
+            foreach ($json as $field_name => $field){
+                $result[$field_name] = "";
+                if (!isset($field['validators']))
+                    continue;
+                
+                foreach ($field['validators'] as $validator_name => $validator){
+                    $result[$field_name] .= "data-bv-" . strtolower($validator_name) . "=true ";
+                    foreach ($validator as $param_name => $param_val){
+                        $result[$field_name] .= "data-bv-" . strtolower($validator_name) . "-" . strtolower($param_name) . "=\"" . strtolower($param_val) . "\" ";
+                    }
+                }
+            }
+
+            return $result;   
+        
+        } else {
+            error_log("Unsupported exportType in exportRules (must be 'json' or 'data').");
             return false;
         }   
     }
     
-    public function exportRulesBootstrapValidatorJSON($prettyPrint = false){
+    public function exportRulesBootstrapValidatorJSON(){
         $result = array();
         // Build scaffold for all fields
         foreach ($this->_fields as $field_name => $field){
@@ -1124,11 +1147,8 @@ class Validator
                     }
                 }
             }
-        }        
-        if ($prettyPrint)
-            return json_encode($result, JSON_PRETTY_PRINT);
-        else
-            return json_encode($result);
+        }
+        return $result;
     }
     
     public function mapBootstrapValidatorRule($ruleName, $params){

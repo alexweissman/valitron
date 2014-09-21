@@ -22,10 +22,17 @@ $v->rule('dateAfter', 'fizz');
 $v->rule('alphaNum', 'fizz');
 $v->validate();
 
-$result = $v->exportRules("bootstrapvalidator", array("prettyPrint" => true));
+$result = $v->exportRules("bootstrapvalidator", array("prettyPrint" => true, "exportType" => "json"));
 
 echo "<pre>";
 print_r($result);
 echo "</pre>";
+
+$result = $v->exportRules("bootstrapvalidator", array("prettyPrint" => true, "exportType" => "data"));
+
+echo "<pre>";
+print_r($result);
+echo "</pre>";
+
 
 ?>
